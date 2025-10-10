@@ -1,0 +1,78 @@
+# azure-pipelines.yml: Azure DevOps Pipeline for Terraform Infrastructure and App Service Deployment
+
+trigger:
+  branches:
+    include:
+      - master # Trigger on changes to the master branch
+  paths:
+    include:
+      - '*.tf'
+      - '*.tfvars'
+      - azure-pipelines.yml
+
+# VARIABLES: Set your environment and Azure Service Connection details
+variables:
+  - group: Azure-Terraform-Secrets # Use a variable group for credentials/backend state config
+  - name: terraformVersion
+    value: '1.4.6' # Specify the desired Terraform version
+  - name: azureServiceConnection
+    value: 'Your-Azure-ARM-Service-Connection-Name' # REPLACE WITH YOUR SERVICE CONNECTION NAME
+
+stages:
+- stage: IaC_Deployment
+  displayName: Terraform Deployment (Init, Plan, Apply)
+  jobs:
+  - job: DeployInfrastructure
+    displayName: Deploy Azure Infrastructure
+    pool:
+      vmImage: 'ubuntu-latest' # Use a modern Linux agent
+
+    steps:
+    # 1. Install Terraform
+    - task: TerraformInstaller@1
+      displayName: 'Install Terraform $(terraformVersion)'
+      inputs:
+        terraformVersion: '$(terraformVersion)'
+
+    # 2. Configure Azure Backend (This assumes you use a Storage Account for remote state)
+    # This step is critical for team collaboration and state locking
+    - task: AzureCLI@2
+      displayName: 'Terraform Init (Remote State)'
+      inputs:
+        azureSubscription: '$(azureServiceConnection)'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        # NOTE: You must replace the backend values below with your actual Azure Storage Account details
+        inlineScript: |
+          terraform init \
+            -backend-config="resource_group_name=$(BackendResourceGroupName)" \
+            -backend-config="storage_account_name=$(BackendStorageAccountName)" \
+            -backend-config="container_name=$(BackendContainerName)" \
+            -backend-config="key=azure-core-networking.terraform.tfstate"
+
+    # 3. Terraform Validation
+    - task: TerraformCLI@0
+      displayName: 'Terraform Validate'
+      inputs:
+        command: 'validate'
+
+    # 4. Terraform Plan
+    - task: TerraformCLI@0
+      displayName: 'Terraform Plan'
+      inputs:
+        command: 'plan'
+        environmentServiceName: '$(azureServiceConnection)'
+        # Output the plan to a file to be passed to the 'apply' step
+        workingDirectory: '$(System.DefaultWorkingDirectory)'
+        commandOptions: '-out=tfplan -input=false'
+
+    # 5. Terraform Apply
+    # This step is conditional: it only runs if the plan step was successful
+    - task: TerraformCLI@0
+      displayName: 'Terraform Apply'
+      inputs:
+        command: 'apply'
+        environmentServiceName: '$(azureServiceConnection)'
+        workingDirectory: '$(System.DefaultWorkingDirectory)'
+        # Apply the pre-generated plan file
+        commandOptions: 'tfplan'

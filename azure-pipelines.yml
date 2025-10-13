@@ -1,4 +1,4 @@
- azure-pipelines.yml: Azure DevOps Pipeline for Terraform Infrastructure and App Service Deployment
+# azure-pipelines.yml: Azure DevOps Pipeline for Terraform Infrastructure and App Service Deployment
 
 trigger:
   branches:
@@ -35,14 +35,12 @@ stages:
         terraformVersion: '$(terraformVersion)'
 
     # 2. Configure Azure Backend (using AzureCLI to perform Init)
-    # This step is critical for team collaboration and state locking
     - task: AzureCLI@2
       displayName: 'Terraform Init (Remote State)'
       inputs:
         azureSubscription: '$(azureServiceConnection)'
         scriptType: 'bash'
         scriptLocation: 'inlineScript'
-        # NOTE: Using variable group values for backend config (BackendResourceGroupName, etc.)
         inlineScript: |
           terraform init \
             -backend-config="resource_group_name=$(BackendResourceGroupName)" \
@@ -62,7 +60,6 @@ stages:
       inputs:
         command: 'plan'
         environmentServiceName: '$(azureServiceConnection)'
-        # Output the plan to a file to be passed to the 'apply' step
         workingDirectory: '$(System.DefaultWorkingDirectory)'
         commandOptions: '-out=tfplan -input=false'
 
@@ -73,5 +70,4 @@ stages:
         command: 'apply'
         environmentServiceName: '$(azureServiceConnection)'
         workingDirectory: '$(System.DefaultWorkingDirectory)'
-        # Apply the pre-generated plan file
         commandOptions: 'tfplan'

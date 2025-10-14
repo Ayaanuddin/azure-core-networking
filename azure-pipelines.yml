@@ -28,7 +28,7 @@ stages:
       vmImage: 'ubuntu-latest' # Use a modern Linux agent
 
     steps:
-    # 1. Install Terraform (Version @2)
+    # 1. Install Terraform (MUST KEEP THIS)
     - task: TerraformInstaller@2
       displayName: 'Install Terraform $(terraformVersion)'
       inputs:
@@ -48,41 +48,34 @@ stages:
             -backend-config="container_name=$(BackendContainerName)" \
             -backend-config="key=azure-core-networking.terraform.tfstate"
 
-    # 3. Terraform Validation (Version @2)
-    - task: TerraformCLI@2
+    # 3. Terraform Validate (Using AzureCLI for consistency)
+    - task: AzureCLI@2
       displayName: 'Terraform Validate'
       inputs:
-        command: 'validate'
+        azureSubscription: '$(azureServiceConnection)'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          terraform validate
 
-    # 4. Terraform Plan
-    - task: TerraformCLI@2
+    # 4. Terraform Plan (FIXED: Using AzureCLI to run the raw command)
+    - task: AzureCLI@2
       displayName: 'Terraform Plan'
       inputs:
-        command: 'plan'
-        environmentServiceName: '$(azureServiceConnection)'
-        workingDirectory: '$(System.DefaultWorkingDirectory)'
-        planFile: 'tfplan' # Plan file is saved as 'tfplan'
+        azureSubscription: '$(azureServiceConnection)'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          # The -out flag guarantees the plan is saved in the working directory.
+          terraform plan -out=tfplan
 
-    # 4a. Publish the plan file as an artifact for reliable sharing
-    - task: PublishPipelineArtifact@1
-      displayName: 'Publish Terraform Plan Artifact'
-      inputs:
-        targetPath: '$(System.DefaultWorkingDirectory)/tfplan'
-        artifact: 'tfplan'
-        publishLocation: 'pipeline'
-
-    # 4b. Download the plan file artifact before Apply (FIXED: targetPath is now '.')
-    - task: DownloadPipelineArtifact@2
-      displayName: 'Download Terraform Plan Artifact'
-      inputs:
-        artifactName: 'tfplan'
-        targetPath: . # <--- Forces download to the current root directory
-
-    # 5. Terraform Apply
-    - task: TerraformCLI@2
+    # 5. Terraform Apply (FIXED: Using AzureCLI to run the raw command)
+    - task: AzureCLI@2
       displayName: 'Terraform Apply'
       inputs:
-        command: 'apply'
-        environmentServiceName: '$(azureServiceConnection)'
-        workingDirectory: '$(System.DefaultWorkingDirectory)'
-        planFile: 'tfplan' # This ensures the apply step finds the plan file from the downloaded artifact
+        azureSubscription: '$(azureServiceConnection)'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          # We pass the saved plan file directly to the apply command.
+          terraform apply -auto-approve tfplan

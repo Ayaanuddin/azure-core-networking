@@ -28,7 +28,7 @@ stages:
       vmImage: 'ubuntu-latest' # Use a modern Linux agent
 
     steps:
-    # 1. Install Terraform (UPDATED VERSION TO @2)
+    # 1. Install Terraform (Version @2)
     - task: TerraformInstaller@2
       displayName: 'Install Terraform $(terraformVersion)'
       inputs:
@@ -48,26 +48,41 @@ stages:
             -backend-config="container_name=$(BackendContainerName)" \
             -backend-config="key=azure-core-networking.terraform.tfstate"
 
-    # 3. Terraform Validation (UPDATED VERSION TO @2)
+    # 3. Terraform Validation (Version @2)
     - task: TerraformCLI@2
       displayName: 'Terraform Validate'
       inputs:
         command: 'validate'
 
-    # 4. Terraform Plan (FIXED: Indentation and using 'planFile' input)
+    # 4. Terraform Plan
     - task: TerraformCLI@2
       displayName: 'Terraform Plan'
       inputs:
         command: 'plan'
         environmentServiceName: '$(azureServiceConnection)'
         workingDirectory: '$(System.DefaultWorkingDirectory)'
-        planFile: 'tfplan' # This ensures the plan file is saved correctly
+        planFile: 'tfplan' # Plan file is saved as 'tfplan'
 
-    # 5. Terraform Apply (FIXED: Indentation and using 'planFile' input)
+    # 4a. NEW: Publish the plan file as an artifact for reliable sharing
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish Terraform Plan Artifact'
+      inputs:
+        targetPath: '$(System.DefaultWorkingDirectory)/tfplan'
+        artifact: 'tfplan'
+        publishLocation: 'pipeline'
+
+    # 4b. NEW: Download the plan file artifact before Apply
+    - task: DownloadPipelineArtifact@2
+      displayName: 'Download Terraform Plan Artifact'
+      inputs:
+        artifactName: 'tfplan'
+        targetPath: '$(System.DefaultWorkingDirectory)'
+
+    # 5. Terraform Apply
     - task: TerraformCLI@2
       displayName: 'Terraform Apply'
       inputs:
         command: 'apply'
         environmentServiceName: '$(azureServiceConnection)'
         workingDirectory: '$(System.DefaultWorkingDirectory)'
-        planFile: 'tfplan' # This ensures the apply step finds the plan file
+        planFile: 'tfplan' # This ensures the apply step finds the plan file from the downloaded artifact

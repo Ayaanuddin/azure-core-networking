@@ -63,7 +63,7 @@ stages:
         workingDirectory: '$(System.DefaultWorkingDirectory)'
         planFile: 'tfplan' # Plan file is saved as 'tfplan'
 
-    # 4a. NEW: Publish the plan file as an artifact for reliable sharing
+    # 4a. Publish the plan file as an artifact for reliable sharing
     - task: PublishPipelineArtifact@1
       displayName: 'Publish Terraform Plan Artifact'
       inputs:
@@ -71,12 +71,12 @@ stages:
         artifact: 'tfplan'
         publishLocation: 'pipeline'
 
-    # 4b. NEW: Download the plan file artifact before Apply
+    # 4b. Download the plan file artifact before Apply (FIXED: targetPath is now '.')
     - task: DownloadPipelineArtifact@2
       displayName: 'Download Terraform Plan Artifact'
       inputs:
         artifactName: 'tfplan'
-        targetPath: '$(System.DefaultWorkingDirectory)'
+        targetPath: . # <--- Forces download to the current root directory
 
     # 5. Terraform Apply
     - task: TerraformCLI@2

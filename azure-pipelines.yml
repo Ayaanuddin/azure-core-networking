@@ -28,13 +28,25 @@ stages:
       vmImage: 'ubuntu-latest' # Use a modern Linux agent
 
     steps:
-    # 1. Install Terraform (MUST KEEP THIS)
-    - task: TerraformInstaller@2
-      displayName: 'Install Terraform $(terraformVersion)'
-      inputs:
-        terraformVersion: '$(terraformVersion)'
+    
+    # 1. MANUAL INSTALL: Download and install Terraform binary
+    # This replaces the problematic 'TerraformInstaller@2' task.
+    - script: |
+        echo "Installing Terraform version $(terraformVersion) manually..."
+        # Download the Terraform zip for Linux AMD64
+        wget -q "https://releases.hashicorp.com/terraform/$(terraformVersion)/terraform_$(terraformVersion)_linux_amd64.zip" -O terraform.zip
+        
+        # Unzip the binary into the Agent's tools directory
+        unzip -q terraform.zip -d $(Agent.ToolsDirectory)
+        
+        # Add the directory to the PATH for subsequent steps
+        echo "##vso[task.prependpath]$(Agent.ToolsDirectory)"
+        
+        # Verify the installation
+        terraform --version
+      displayName: 'Manual Install Terraform $(terraformVersion)'
 
-    # 2. Configure Azure Backend (using AzureCLI to perform Init)
+    # 2. Terraform Init (Using AzureCLI with raw command)
     - task: AzureCLI@2
       displayName: 'Terraform Init (Remote State)'
       inputs:
@@ -48,7 +60,7 @@ stages:
             -backend-config="container_name=$(BackendContainerName)" \
             -backend-config="key=azure-core-networking.terraform.tfstate"
 
-    # 3. Terraform Validate (Using AzureCLI for consistency)
+    # 3. Terraform Validate (Using AzureCLI with raw command)
     - task: AzureCLI@2
       displayName: 'Terraform Validate'
       inputs:
@@ -58,7 +70,7 @@ stages:
         inlineScript: |
           terraform validate
 
-    # 4. Terraform Plan (FIXED: Using AzureCLI to run the raw command)
+    # 4. Terraform Plan (Using AzureCLI with raw command)
     - task: AzureCLI@2
       displayName: 'Terraform Plan'
       inputs:
@@ -66,10 +78,10 @@ stages:
         scriptType: 'bash'
         scriptLocation: 'inlineScript'
         inlineScript: |
-          # The -out flag guarantees the plan is saved in the working directory.
+          # The -out flag guarantees the plan is saved as 'tfplan' in the working directory.
           terraform plan -out=tfplan
 
-    # 5. Terraform Apply (FIXED: Using AzureCLI to run the raw command)
+    # 5. Terraform Apply (Using AzureCLI with raw command)
     - task: AzureCLI@2
       displayName: 'Terraform Apply'
       inputs:

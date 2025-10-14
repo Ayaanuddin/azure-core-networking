@@ -54,14 +54,20 @@ stages:
       inputs:
         command: 'validate'
 
-    # 4. Terraform Plan
-- task: TerraformCLI@2
-  # ... other inputs ...
-  workingDirectory: '$(System.DefaultWorkingDirectory)'
-  commandOptions: '-out=tfplan -input=false' # <--- Outputting plan to a file named 'tfplan'
+    # 4. Terraform Plan (FIXED: Indentation and using 'planFile' input)
+    - task: TerraformCLI@2
+      displayName: 'Terraform Plan'
+      inputs:
+        command: 'plan'
+        environmentServiceName: '$(azureServiceConnection)'
+        workingDirectory: '$(System.DefaultWorkingDirectory)'
+        planFile: 'tfplan' # This ensures the plan file is saved correctly
 
-    # 5.  Terraform Apply
-- task: TerraformCLI@2
-  # ... other inputs ...
-  workingDirectory: '$(System.DefaultWorkingDirectory)'
-  commandOptions: 'tfplan' # <--- Expecting 'tfplan' to be in the working directory
+    # 5. Terraform Apply (FIXED: Indentation and using 'planFile' input)
+    - task: TerraformCLI@2
+      displayName: 'Terraform Apply'
+      inputs:
+        command: 'apply'
+        environmentServiceName: '$(azureServiceConnection)'
+        workingDirectory: '$(System.DefaultWorkingDirectory)'
+        planFile: 'tfplan' # This ensures the apply step finds the plan file

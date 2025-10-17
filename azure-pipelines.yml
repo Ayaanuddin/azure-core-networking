@@ -28,8 +28,6 @@ stages:
     steps:
     
     # 1. Manual Install Terraform 1.4.6
-    # This task solves the Bash 127 (command not found) error by
-    # ensuring 'terraform' is in the /usr/local/bin PATH.
     - task: Bash@3
       displayName: 'Manual Install Terraform 1.4.6'
       inputs:
@@ -37,25 +35,15 @@ stages:
         script: |
           TERRAFORM_VERSION="1.4.6"
           echo "Installing Terraform version ${TERRAFORM_VERSION} manually..."
-          
-          # Download the specified version
           curl -o terraform.zip https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip
-          
-          # Unzip the binary
           unzip terraform.zip
-          
-          # Move the binary to a directory that is guaranteed to be in the PATH
-          # This is the crucial fix for error 127
           sudo mv terraform /usr/local/bin/
-          
-          # Verification step
           terraform version
 
     # 2. Terraform Initialization (Init)
     - task: AzureCLI@2
       displayName: 'Terraform Init (Backend Setup)'
       inputs:
-        # Service connection name must match the name you created exactly
         connectedServiceNameARM: 'Azure-Tredence-DevOps-ARM' 
         scriptType: 'bash'
         scriptLocation: 'inlineScript'
@@ -66,31 +54,29 @@ stages:
             -backend-config="container_name=$(backendContainerName)" \
             -backend-config="key=core-networking-dev.tfstate"
 
-    # 3. Terraform Plan (Using AzureCLI to avoid the CLI task bug)
+    # 3. Terraform Plan
     - task: AzureCLI@2
       displayName: 'Terraform Plan'
       inputs:
         connectedServiceNameARM: 'Azure-Tredence-DevOps-ARM'
         scriptType: 'bash'
         scriptLocation: 'inlineScript'
-        # The -out flag is key; it creates the plan file
+        # Creates the plan file named 'tfplan' in the working directory
         inlineScript: |
           terraform plan -out=tfplan \
             -var="resource_group_name=$(resourceGroupName)" \
             -var="location=$(location)"
           
-          echo "##vso[task.setvariable variable=tfplanFile]$(System.DefaultWorkingDirectory)/tfplan"
-
-    # 4. Terraform Apply (Using AzureCLI to read the plan file)
+    # 4. Terraform Apply (FIXED: Referencing the file using the relative path)
     - task: AzureCLI@2
       displayName: 'Terraform Apply'
       inputs:
         connectedServiceNameARM: 'Azure-Tredence-DevOps-ARM'
         scriptType: 'bash'
         scriptLocation: 'inlineScript'
-        # Reads the exact plan file created in the previous step
+        # Now correctly references the plan file as './tfplan'
         inlineScript: |
-          terraform apply -auto-approve $(System.DefaultWorkingDirectory)/tfplan
+          terraform apply -auto-approve ./tfplan
 
     # 5. Clean Up
     - task: Bash@3

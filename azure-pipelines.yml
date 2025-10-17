@@ -1,93 +1,104 @@
-# azure-pipelines.yml: Azure DevOps Pipeline for Terraform Infrastructure and App Service Deployment
+# This pipeline manually installs Terraform and uses AzureCLI for plan/apply
+# to overcome persistent bugs and environment PATH issues.
 
 trigger:
-  branches:
-    include:
-      - master # Trigger on changes to the master branch
-  paths:
-    include:
-      - '*.tf'
-      - '*.tfvars'
-      - azure-pipelines.yml
+- master
 
-# VARIABLES: Set your environment and Azure Service Connection details
+pool:
+  # IMPORTANT: If your parallelism grant is not approved, replace 'ubuntu-latest' 
+  # with the name of your self-hosted agent pool (e.g., name: 'Default').
+  vmImage: 'ubuntu-latest'
+  # name: 'Default' # <-- Use this line if using a self-hosted agent
+
 variables:
-  - group: Azure-Terraform-Secrets # Use a variable group for credentials/backend state config
-  - name: terraformVersion
-    value: '1.4.6' # Specify the desired Terraform version
-  - name: azureServiceConnection
-    value: 'Azure-Tredence-DevOps-ARM' # This value matches the connection we created
+  # The location where Terraform will store its state file
+  backendResourceGroupName: 'rg-terraform-backend'
+  backendStorageAccountName: 'tredenceterraformstate'
+  backendContainerName: 'tfstate'
+  # Naming convention for the deployed infrastructure
+  resourceGroupName: 'rg-core-networking-dev'
+  location: 'eastus'
 
 stages:
-- stage: IaC_Deployment
-  displayName: Terraform Deployment (Init, Plan, Apply)
+- stage: DeployInfrastructure
+  displayName: 'Deploy Core Infrastructure'
   jobs:
   - job: DeployInfrastructure
-    displayName: Deploy Azure Infrastructure
-    pool:
-      vmImage: 'ubuntu-latest' # Use a modern Linux agent
-
+    displayName: 'Terraform Execution'
     steps:
     
-    # 1. MANUAL INSTALL: Download and install Terraform binary
-    # This replaces the problematic 'TerraformInstaller@2' task.
-    - script: |
-        echo "Installing Terraform version $(terraformVersion) manually..."
-        # Download the Terraform zip for Linux AMD64
-        wget -q "https://releases.hashicorp.com/terraform/$(terraformVersion)/terraform_$(terraformVersion)_linux_amd64.zip" -O terraform.zip
-        
-        # Unzip the binary into the Agent's tools directory
-        unzip -q terraform.zip -d $(Agent.ToolsDirectory)
-        
-        # Add the directory to the PATH for subsequent steps
-        echo "##vso[task.prependpath]$(Agent.ToolsDirectory)"
-        
-        # Verify the installation
-        terraform --version
-      displayName: 'Manual Install Terraform $(terraformVersion)'
-
-    # 2. Terraform Init (Using AzureCLI with raw command)
-    - task: AzureCLI@2
-      displayName: 'Terraform Init (Remote State)'
+    # 1. Manual Install Terraform 1.4.6
+    # This task solves the Bash 127 (command not found) error by
+    # ensuring 'terraform' is in the /usr/local/bin PATH.
+    - task: Bash@3
+      displayName: 'Manual Install Terraform 1.4.6'
       inputs:
-        azureSubscription: '$(azureServiceConnection)'
+        targetType: 'inline'
+        script: |
+          TERRAFORM_VERSION="1.4.6"
+          echo "Installing Terraform version ${TERRAFORM_VERSION} manually..."
+          
+          # Download the specified version
+          curl -o terraform.zip https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip
+          
+          # Unzip the binary
+          unzip terraform.zip
+          
+          # Move the binary to a directory that is guaranteed to be in the PATH
+          # This is the crucial fix for error 127
+          sudo mv terraform /usr/local/bin/
+          
+          # Verification step
+          terraform version
+
+    # 2. Terraform Initialization (Init)
+    - task: AzureCLI@2
+      displayName: 'Terraform Init (Backend Setup)'
+      inputs:
+        # Service connection name must match the name you created exactly
+        connectedServiceNameARM: 'Azure-Tredence-DevOps-ARM' 
         scriptType: 'bash'
         scriptLocation: 'inlineScript'
         inlineScript: |
           terraform init \
-            -backend-config="resource_group_name=$(BackendResourceGroupName)" \
-            -backend-config="storage_account_name=$(BackendStorageAccountName)" \
-            -backend-config="container_name=$(BackendContainerName)" \
-            -backend-config="key=azure-core-networking.terraform.tfstate"
+            -backend-config="resource_group_name=$(backendResourceGroupName)" \
+            -backend-config="storage_account_name=$(backendStorageAccountName)" \
+            -backend-config="container_name=$(backendContainerName)" \
+            -backend-config="key=core-networking-dev.tfstate"
 
-    # 3. Terraform Validate (Using AzureCLI with raw command)
-    - task: AzureCLI@2
-      displayName: 'Terraform Validate'
-      inputs:
-        azureSubscription: '$(azureServiceConnection)'
-        scriptType: 'bash'
-        scriptLocation: 'inlineScript'
-        inlineScript: |
-          terraform validate
-
-    # 4. Terraform Plan (Using AzureCLI with raw command)
+    # 3. Terraform Plan (Using AzureCLI to avoid the CLI task bug)
     - task: AzureCLI@2
       displayName: 'Terraform Plan'
       inputs:
-        azureSubscription: '$(azureServiceConnection)'
+        connectedServiceNameARM: 'Azure-Tredence-DevOps-ARM'
         scriptType: 'bash'
         scriptLocation: 'inlineScript'
+        # The -out flag is key; it creates the plan file
         inlineScript: |
-          # The -out flag guarantees the plan is saved as 'tfplan' in the working directory.
-          terraform plan -out=tfplan
+          terraform plan -out=tfplan \
+            -var="resource_group_name=$(resourceGroupName)" \
+            -var="location=$(location)"
+          
+          echo "##vso[task.setvariable variable=tfplanFile]$(System.DefaultWorkingDirectory)/tfplan"
 
-    # 5. Terraform Apply (Using AzureCLI with raw command)
+    # 4. Terraform Apply (Using AzureCLI to read the plan file)
     - task: AzureCLI@2
       displayName: 'Terraform Apply'
       inputs:
-        azureSubscription: '$(azureServiceConnection)'
+        connectedServiceNameARM: 'Azure-Tredence-DevOps-ARM'
         scriptType: 'bash'
         scriptLocation: 'inlineScript'
+        # Reads the exact plan file created in the previous step
         inlineScript: |
-          # We pass the saved plan file directly to the apply command.
-          terraform apply -auto-approve tfplan
+          terraform apply -auto-approve $(System.DefaultWorkingDirectory)/tfplan
+
+    # 5. Clean Up
+    - task: Bash@3
+      displayName: 'Clean Up Plan File'
+      condition: always()
+      inputs:
+        targetType: 'inline'
+        script: |
+          # Remove the tfplan file after use
+          rm -f tfplan
+          echo "tfplan file removed."

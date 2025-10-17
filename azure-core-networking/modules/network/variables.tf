@@ -1,24 +1,31 @@
-# NOTE: This file is located in the 'Module' directory.
-# It uses 'resource_group_name' because the pipeline passes this value.
+# This file is located in the project's root directory (e.g., /project_root/variables.tf).
+# It defines variables used to configure the entire deployment.
 
-variable "resource_group_name" {
-  description = "The name of the resource group, used for resource naming and tagging."
+# 1. Project Prefix
+# This is used as the base name for all resources to ensure unique naming.
+variable "project_prefix" {
+  description = "A short prefix used for all resource names (e.g., 'proj-web-app')."
   type        = string
 }
 
+# 2. Environment Tag
+# This defines the environment (dev, test, prod) which is often appended to names.
+variable "environment" {
+  description = "The environment name (e.g., 'dev', 'prod')."
+  type        = string
+}
+
+# 3. Azure Location
+# The region where all resources will be deployed.
 variable "location" {
-  description = "The Azure region where resources will be deployed (e.g., eastus2)."
+  description = "The Azure region to deploy resources (e.g., 'East US', 'West Europe')."
   type        = string
 }
 
+# 4. VNet Address Space (Optional for customization)
+# Allows overriding the default VNet CIDR block defined in your network module.
 variable "vnet_address_space" {
-  description = "The address space (CIDR block) for the Virtual Network (e.g., [\"10.50.0.0/16\"])."
+  description = "The address space (CIDR block) for the Virtual Network."
   type        = list(string)
-  default     = ["10.50.0.0/16"] # Adding a default makes the root main.tf cleaner
-}
-
-variable "subnet_address_prefix" {
-  description = "The address prefix (CIDR block) for the subnet (e.g., [\"10.50.1.0/24\"])."
-  type        = list(string)
-  default     = ["10.50.1.0/24"] # Adding a default makes the root main.tf cleaner
+  default     = ["10.10.0.0/16"]
 }

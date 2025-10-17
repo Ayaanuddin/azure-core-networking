@@ -1,7 +1,8 @@
-# This file contains the actual Azure resource definitions.
+# This file contains the actual Azure resource definitions for the network module.
 
 #
 # 1. Azure Resource Group
+# The resource group is created here based on the project_name variable.
 #
 resource "azurerm_resource_group" "rg" {
   # Uses the input variable to set the name and location
@@ -14,7 +15,9 @@ resource "azurerm_resource_group" "rg" {
 #
 resource "azurerm_virtual_network" "vnet" {
   name                = "${var.project_name}-vnet"
+  # This uses the location of the resource group just created
   location            = azurerm_resource_group.rg.location
+  # This uses the name of the resource group just created
   resource_group_name = azurerm_resource_group.rg.name
 
   # Uses the input list variable for the address space
@@ -35,5 +38,6 @@ resource "azurerm_subnet" "subnet" {
 
 # Output the VNet ID so the root module can reference it if needed
 output "vnet_id" {
-  value = azurerm_virtual_network.vnet.id
+  description = "The ID of the created Virtual Network (VNet)."
+  value       = azurerm_virtual_network.vnet.id
 }

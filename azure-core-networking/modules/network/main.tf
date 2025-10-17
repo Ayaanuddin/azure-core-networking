@@ -1,43 +1,28 @@
-# This file contains the actual Azure resource definitions for the network module.
+# This file MUST be in the main folder where you run 'terraform plan'.
+# It declares the variables that your pipeline is passing in via '-var' flags.
 
-#
-# 1. Azure Resource Group
-# The resource group is created here based on the project_name variable.
-#
-resource "azurerm_resource_group" "rg" {
-  # Uses the input variable to set the name and location
-  name     = "${var.project_name}-rg"
-  location = var.location
+# 1. Resource Group Name (REQUIRED by your pipeline to stop the error)
+variable "resource_group_name" {
+  description = "The name of the Resource Group, which will be used as the base name for all resources."
+  type        = string
 }
 
-#
-# 2. Azure Virtual Network (VNet)
-#
-resource "azurerm_virtual_network" "vnet" {
-  name                = "${var.project_name}-vnet"
-  # This uses the location of the resource group just created
-  location            = azurerm_resource_group.rg.location
-  # This uses the name of the resource group just created
-  resource_group_name = azurerm_resource_group.rg.name
-
-  # Uses the input list variable for the address space
-  address_space       = var.vnet_address_space
+# 2. Azure Location (REQUIRED by your pipeline)
+variable "location" {
+  description = "The Azure region to deploy resources (e.g., 'eastus')."
+  type        = string
 }
 
-#
-# 3. Azure Subnet
-#
-resource "azurerm_subnet" "subnet" {
-  name                 = "${var.project_name}-subnet"
-  resource_group_name  = azurerm_resource_group.rg.name
-  virtual_network_name = azurerm_virtual_network.vnet.name
-
-  # Uses the input list variable for the address prefix
-  address_prefixes     = var.subnet_address_prefix
+# 3. VNet Address Space (For configuration)
+variable "vnet_address_space" {
+  description = "The address space (CIDR block) for the Virtual Network."
+  type        = list(string)
+  default     = ["10.10.0.0/16"]
 }
 
-# Output the VNet ID so the root module can reference it if needed
-output "vnet_id" {
-  description = "The ID of the created Virtual Network (VNet)."
-  value       = azurerm_virtual_network.vnet.id
+# 4. Subnet Address Prefix (For configuration)
+variable "subnet_address_prefix" {
+  description = "The address prefix (CIDR block) for the subnet."
+  type        = list(string)
+  default     = ["10.10.1.0/24"]
 }

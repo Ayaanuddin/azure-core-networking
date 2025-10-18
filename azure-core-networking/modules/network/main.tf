@@ -1,43 +1,46 @@
-# This file contains the actual Azure resource definitions for the network module.
-# It uses the variables defined in variables.tf for configuration.
+# This block sets up the Azure provider configuration.
+terraform {
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 3.0"
+    }
+  }
+}
 
-#
-# 1. Azure Resource Group
-# The resource group is created here based on the project_name variable.
-#
-resource "azurerm_resource_group" "rg" {
-  # The name is constructed using the input project_name and a suffix
-  name     = "${var.project_name}-rg"
+# The Azure provider configuration.
+provider "azurerm" {
+  features {}
+}
+
+# -----------------------------------------------------
+# Locals: Define derived values once for reuse
+# -----------------------------------------------------
+
+locals {
+  # Concatenate project_prefix and environment to create a base name for all resources
+  project_name = "${var.project_prefix}-${var.environment}"
+}
+
+# -----------------------------------------------------
+# Module: Core Network Deployment
+# -----------------------------------------------------
+
+# The core_network module handles the Resource Group, VNet, and Subnet creation.
+module "core_network" {
+  # This path should point to your network module directory
+  source = "./modules/network"
+
+  # 1. Project Naming: Use the combined local variable
+  # NOTE: The module expects 'project_name', so we pass the local value to it.
+  project_name = local.project_name
+
+  # 2. Location: Pass the location variable from the root to the module
   location = var.location
-}
 
-#
-# 2. Azure Virtual Network (VNet)
-#
-resource "azurerm_virtual_network" "vnet" {
-  name                = "${var.project_name}-vnet"
-  # VNet must be in the same location as the resource group
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
+  # 3. VNet Address Space: Pass the VNet CIDR block
+  vnet_address_space = var.vnet_address_space
 
-  # Uses the input list variable for the address space
-  address_space       = var.vnet_address_space
-}
-
-#
-# 3. Azure Subnet
-#
-resource "azurerm_subnet" "subnet" {
-  name                 = "${var.project_name}-subnet"
-  resource_group_name  = azurerm_resource_group.rg.name
-  virtual_network_name = azurerm_virtual_network.vnet.name
-
-  # Uses the input list variable for the address prefix
-  address_prefixes     = var.subnet_address_prefix
-}
-
-# Output the VNet ID so the root module can reference it if needed
-output "vnet_id" {
-  description = "The ID of the newly created Virtual Network."
-  value       = azurerm_virtual_network.vnet.id
+  # 4. Subnet Address Prefix: Pass the Subnet CIDR block
+  subnet_address_prefix = var.subnet_address_prefix
 }

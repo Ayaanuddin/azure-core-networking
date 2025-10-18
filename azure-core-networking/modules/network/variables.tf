@@ -1,3 +1,26 @@
+
+# modules/network/variables.tf
+
+variable "project_name" {
+  description = "Project name prefix"
+  type        = string
+}
+
+variable "location" {
+  description = "Azure location"
+  type        = string
+}
+
+variable "vnet_address_space" {
+  description = "VNet address space"
+  type        = list(string)
+}
+
+variable "subnet_address_prefix" {
+  description = "Subnet address prefix"
+  type        = list(string)
+}
+
 variable "project_prefix" {
   description = "Prefix for project resources"
   type        = string

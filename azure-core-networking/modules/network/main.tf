@@ -1,27 +1,43 @@
-# This file declares the variables that the CLI passes into the Root Module.
-# The variable names here MUST match the names used in your -var flags.
+# This file contains the actual Azure resource definitions for the network module.
+# It uses the variables defined in variables.tf for configuration.
 
-variable "resource_group_name" {
-  description = "The name of the resource group to be created. Used as a unique identifier for resources."
-  type        = string
+#
+# 1. Azure Resource Group
+# The resource group is created here based on the project_name variable.
+#
+resource "azurerm_resource_group" "rg" {
+  # The name is constructed using the input project_name and a suffix
+  name     = "${var.project_name}-rg"
+  location = var.location
 }
 
-variable "location" {
-  description = "The Azure region where resources will be deployed (e.g., eastus)."
-  type        = string
+#
+# 2. Azure Virtual Network (VNet)
+#
+resource "azurerm_virtual_network" "vnet" {
+  name                = "${var.project_name}-vnet"
+  # VNet must be in the same location as the resource group
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+
+  # Uses the input list variable for the address space
+  address_space       = var.vnet_address_space
 }
 
-# This is an optional variable to allow overriding the VNet CIDR block.
-# It uses the default value defined here if no value is provided.
-variable "vnet_address_space" {
-  description = "The address space (CIDR block) for the Virtual Network."
-  type        = list(string)
-  default     = ["10.50.0.0/16"]
+#
+# 3. Azure Subnet
+#
+resource "azurerm_subnet" "subnet" {
+  name                 = "${var.project_name}-subnet"
+  resource_group_name  = azurerm_resource_group.rg.name
+  virtual_network_name = azurerm_virtual_network.vnet.name
+
+  # Uses the input list variable for the address prefix
+  address_prefixes     = var.subnet_address_prefix
 }
 
-# This is an optional variable to allow overriding the Subnet CIDR block.
-variable "subnet_address_prefix" {
-  description = "The address prefix (CIDR block) for the subnet."
-  type        = list(string)
-  default     = ["10.50.1.0/24"]
+# Output the VNet ID so the root module can reference it if needed
+output "vnet_id" {
+  description = "The ID of the newly created Virtual Network."
+  value       = azurerm_virtual_network.vnet.id
 }

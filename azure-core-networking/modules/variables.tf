@@ -11,12 +11,12 @@ variable "address_space" {
 }
 
 variable "location" {
-  description = "Azure location for the VNet"
+  description = "Azure location for the resources"
   type        = string
-  default     = "East US"
+  default     = "eastus"
 }
 
 variable "resource_group_name" {
-  description = "Resource group name"
+  description = "The name of the resource group"
   type        = string
 }
